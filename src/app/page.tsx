@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState, useCallback, useTransition, useRef } from "react";
 import { useGameStore } from "@/lib/store";
-import { StatKey } from "@/lib/engine/types";
 import {
   Coins,
   Crown,
@@ -10,7 +9,6 @@ import {
   Shield,
   Mic,
   MicOff,
-  RotateCcw,
   Languages,
   Volume2,
   VolumeX,
@@ -86,12 +84,22 @@ export default function GameBoard() {
   }, []);
 
   const handleStartGame = () => {
+    if (!currentUser) {
+      setIsAuthOpen(true);
+      return;
+    }
     soundFx.init();
     soundFx.playSfx("hooves");
     setHasStarted(true);
     setTimeout(() => {
       narrateEvent(currentEvent);
     }, 600);
+  };
+
+  const handleLogout = async () => {
+    await authClient.signOut();
+    setCurrentUser(null);
+    setHasStarted(false);
   };
 
   const handleSpeech = useCallback(() => {
@@ -199,17 +207,11 @@ export default function GameBoard() {
 
   const currentKingdom = kingdoms.find((k) => k.id === activeKingdomId) || kingdoms[0];
 
-  const statIcons: Record<StatKey, { icon: React.ReactNode; label: { ru: string; en: string }; color: string }> = {
-    treasury: { icon: <Coins className="w-4 h-4" />, label: { ru: "Казна", en: "Gold" }, color: "text-amber-400" },
-    influence: { icon: <Crown className="w-4 h-4" />, label: { ru: "Власть", en: "Influence" }, color: "text-purple-400" },
-    people: { icon: <Users className="w-4 h-4" />, label: { ru: "Народ", en: "People" }, color: "text-emerald-400" },
-    army: { icon: <Shield className="w-4 h-4" />, label: { ru: "Армия", en: "Army" }, color: "text-red-400" },
-  };
-
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between max-w-md mx-auto p-4 border-x border-slate-800 select-none">
-      <header className="space-y-3">
-        <div className="flex justify-between items-center text-xs text-slate-400">
+    <main className="min-h-screen bg-[#0d0906] text-[#f5e6b8] flex flex-col justify-between max-w-md mx-auto p-4 border-x-2 border-[#3b2716] select-none shadow-2xl relative font-serif">
+      {/* Top Header: Realm & Subtle Status Dots (No Raw Numbers!) */}
+      <header className="space-y-3 bg-[#170f09] border border-[#543d2b] p-3 rounded-2xl shadow-lg">
+        <div className="flex justify-between items-center text-xs">
           <KingdomSelector
             currentKingdom={currentKingdom}
             kingdoms={kingdoms}
@@ -218,120 +220,119 @@ export default function GameBoard() {
             onCreate={createKingdom}
           />
           <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setIsAuthOpen(true)}
-              className="p-1.5 bg-slate-900 border border-slate-800 rounded-lg hover:bg-slate-800 text-slate-400"
-              title="Профиль"
-            >
-              <User className="w-3.5 h-3.5 text-amber-400" />
-            </button>
-            <span className="font-bold uppercase tracking-wider text-amber-500 mr-1">
-              {language === "ru" ? `День ${run.day}` : `Day ${run.day}`}
+            <span className="font-bold text-[#d4af37] tracking-wider uppercase text-xs">
+              {language === "ru" ? `Лето ${run.day}` : `Year ${run.day}`}
             </span>
             <button
               onClick={toggleMute}
-              className="p-1.5 bg-slate-900 border border-slate-800 rounded-lg hover:bg-slate-800 text-slate-400"
+              className="p-1.5 bg-[#25170d] border border-[#543d2b] rounded-lg hover:bg-[#352213] text-[#c49a45]"
               title="Звук"
             >
-              {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5 text-amber-400" />}
+              {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5 text-[#d4af37]" />}
             </button>
             <button
               onClick={() => startTransition(() => setLanguage(language === "ru" ? "en" : "ru"))}
-              className="px-2 py-1.5 bg-slate-900 border border-slate-800 rounded-lg flex items-center gap-1 hover:bg-slate-800 text-slate-300"
+              className="px-2 py-1.5 bg-[#25170d] border border-[#543d2b] rounded-lg flex items-center gap-1 hover:bg-[#352213] text-[#f5e6b8]"
             >
-              <Languages className="w-3.5 h-3.5 text-slate-400" />
+              <Languages className="w-3.5 h-3.5 text-[#c49a45]" />
               <span className="uppercase text-[10px] font-bold">{language}</span>
             </button>
             <button
-              onClick={restartGame}
-              className="p-1.5 bg-slate-900 border border-slate-800 rounded-lg hover:bg-slate-800 text-slate-400"
-              title="Перезапуск"
+              onClick={handleLogout}
+              className="p-1.5 bg-[#25170d] border border-[#543d2b] rounded-lg hover:bg-[#352213] text-[#c49a45]"
+              title="Выход из профиля"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
+              <User className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-2">
-          {(Object.keys(statIcons) as StatKey[]).map((key) => {
-            const val = run.stats[key];
-            const meta = statIcons[key];
-            return (
-              <div key={key} className="bg-slate-900/80 border border-slate-800 rounded-lg p-2 text-center">
-                <div className={`flex justify-center mb-1 ${meta.color}`}>{meta.icon}</div>
-                <div className="text-[10px] text-slate-400">{meta.label[language]}</div>
-                <div className="text-xs font-bold">{val}%</div>
-                <div className="w-full bg-slate-800 h-1 rounded-full mt-1 overflow-hidden">
-                  <div
-                    className="h-full bg-amber-500 transition-all duration-300"
-                    style={{ width: `${Math.min(100, Math.max(0, val))}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
+        {/* Medieval Aesthetic Indicators (No Raw Scores/Percentages!) */}
+        <div className="grid grid-cols-4 gap-2 pt-1 border-t border-[#3b2716]">
+          <div className="flex flex-col items-center">
+            <Coins className="w-4 h-4 text-[#e5c158] mb-1" />
+            <span className="text-[10px] text-[#c49a45] uppercase tracking-wider">Казна</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-[#d4af37] mt-1 shadow-[0_0_8px_#ffd700]" />
+          </div>
+          <div className="flex flex-col items-center">
+            <Crown className="w-4 h-4 text-[#ba79dd] mb-1" />
+            <span className="text-[10px] text-[#c49a45] uppercase tracking-wider">Власть</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-[#ba79dd] mt-1 shadow-[0_0_8px_#ba79dd]" />
+          </div>
+          <div className="flex flex-col items-center">
+            <Users className="w-4 h-4 text-[#68bb76] mb-1" />
+            <span className="text-[10px] text-[#c49a45] uppercase tracking-wider">Народ</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-[#68bb76] mt-1 shadow-[0_0_8px_#68bb76]" />
+          </div>
+          <div className="flex flex-col items-center">
+            <Shield className="w-4 h-4 text-[#dd5a5a] mb-1" />
+            <span className="text-[10px] text-[#c49a45] uppercase tracking-wider">Армия</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-[#dd5a5a] mt-1 shadow-[0_0_8px_#dd5a5a]" />
+          </div>
         </div>
       </header>
 
-      <section className="my-auto py-4 space-y-3">
+      {/* Main Throne Hall & Card */}
+      <section className="my-auto py-3 space-y-3">
         {activeAftermath && (
-          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-start gap-2 shadow-lg animate-fade-in">
-            <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <p className="leading-relaxed font-medium">{activeAftermath}</p>
+          <div className="p-3 bg-[#24170c] border border-[#a87d32] rounded-2xl text-xs text-[#f5e6b8] flex items-start gap-2 shadow-xl animate-fade-in">
+            <Sparkles className="w-4 h-4 text-[#d4af37] shrink-0 mt-0.5" />
+            <p className="leading-relaxed font-serif italic">{activeAftermath}</p>
           </div>
         )}
 
         {run.isGameOver ? (
-          <div className="bg-slate-900 border border-red-900/50 rounded-xl p-6 text-center space-y-4">
-            <div className="text-4xl">💀</div>
-            <h2 className="text-lg font-bold text-red-400">
-              {language === "ru" ? "Правление окончено" : "Reign Ended"}
+          <div className="bg-[#1c110a] border-2 border-[#801b1b] rounded-3xl p-6 text-center space-y-4 shadow-2xl">
+            <div className="text-5xl">👑💀</div>
+            <h2 className="text-xl font-bold text-[#e06666] tracking-wide">
+              {language === "ru" ? "Правление прервано" : "Reign Terminated"}
             </h2>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p className="text-xs sm:text-sm text-[#d4c5a9] leading-relaxed">
               {run.endCondition?.message[language]}
             </p>
-            <div className="text-xs text-slate-500">
-              {language === "ru" ? `Вы продержались у власти ${run.day} дней.` : `You lasted ${run.day} days.`}
+            <div className="text-xs text-[#a38e72]">
+              {language === "ru" ? `Ваш род удерживал трон ${run.day} лун.` : `You lasted ${run.day} moons.`}
             </div>
             <button
               onClick={restartGame}
-              className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded-lg text-sm transition"
+              className="w-full py-3 bg-[#a87d32] hover:bg-[#c49a45] text-[#140d07] font-bold rounded-xl text-xs uppercase tracking-wider transition"
             >
-              {language === "ru" ? "Начать заново" : "Play Again"}
+              {language === "ru" ? "Взойти на трон заново" : "Ascend Throne Again"}
             </button>
           </div>
         ) : (
           <div className="space-y-3">
             <EventCard event={currentEvent} language={language} onDecision={makeDecision} />
             {isSpeaking && (
-              <div className="flex items-center justify-center gap-1.5 text-xs text-amber-400 animate-pulse">
+              <div className="flex items-center justify-center gap-2 text-xs text-[#d4af37] animate-pulse">
                 <Volume1 className="w-4 h-4" />
-                <span>{language === "ru" ? "Голос из тронного зала..." : "Voice in the throne room..."}</span>
+                <span>{language === "ru" ? "Гонец вещает в тронном зале..." : "Courier speaks in throne room..."}</span>
               </div>
             )}
           </div>
         )}
       </section>
 
+      {/* Voice Control Bar */}
       {!run.isGameOver && (
-        <footer className="pt-2 pb-4 text-center space-y-2">
+        <footer className="pt-2 pb-3 text-center">
           <button
             onClick={handleSpeech}
-            className={`px-5 py-2.5 rounded-full border text-xs font-semibold flex items-center justify-center gap-2 mx-auto transition shadow-lg ${
+            className={`px-6 py-3 rounded-2xl border-2 text-xs font-bold flex items-center justify-center gap-2 mx-auto transition shadow-2xl ${
               isListening
-                ? "bg-red-500/25 border-red-500 text-red-300 animate-pulse scale-105"
-                : "bg-slate-900 border-slate-800 text-slate-300 hover:text-white"
+                ? "bg-[#661b1b]/80 border-[#e06666] text-[#ffd6d6] animate-pulse scale-105"
+                : "bg-[#1f140c] border-[#543d2b] text-[#f5e6b8] hover:border-[#a87d32]"
             }`}
           >
-            {isListening ? <Mic className="w-4 h-4 text-red-400 animate-bounce" /> : <MicOff className="w-4 h-4 text-slate-400" />}
-            <span>
+            {isListening ? <Mic className="w-4 h-4 text-[#ff8080] animate-bounce" /> : <MicOff className="w-4 h-4 text-[#8f7453]" />}
+            <span className="tracking-wide">
               {isListening
                 ? language === "ru"
-                  ? "Слушаю («Да / Первый» или «Нет / Второй»)..."
-                  : "Listening ('Yes / One' or 'No / Two')..."
+                  ? "Слушаю волю милорда («Да» / «Нет»)..."
+                  : "Listening for decree ('Yes' / 'No')..."
                 : language === "ru"
-                ? "Включить микрофон (Голосовое управление)"
-                : "Enable Microphone (Voice Control)"}
+                ? "Голосовой указ (Микрофон)"
+                : "Voice Decree (Microphone)"}
             </span>
           </button>
         </footer>

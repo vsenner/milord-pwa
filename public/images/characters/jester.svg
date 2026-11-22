@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 500" width="100%" height="100%">
+  <defs>
+    <radialGradient id="bgGrad" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#2d1f14" />
+      <stop offset="70%" stop-color="#140d07" />
+      <stop offset="100%" stop-color="#070402" />
+    </radialGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d4af37" />
+      <stop offset="50%" stop-color="#aa7c11" />
+      <stop offset="100%" stop-color="#5a4106" />
+    </linearGradient>
+    <filter id="parchment">
+      <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="4" result="noise" />
+      <feDiffuseLighting in="noise" lighting-color="#eedc9a" surfaceScale="2">
+        <feDistantLight azimuth="45" elevation="60" />
+      </feDiffuseLighting>
+      <feBlend mode="multiply" in="SourceGraphic" />
+    </filter>
+  </defs>
+
+  <!-- Background Canvas -->
+  <rect width="400" height="500" fill="url(#bgGrad)" />
+
+  <!-- Outer Ornate Medieval Border -->
+  <rect x="15" y="15" width="370" height="470" rx="16" fill="none" stroke="url(#goldGrad)" stroke-width="6" />
+  <rect x="25" y="25" width="350" height="450" rx="10" fill="none" stroke="#4a3520" stroke-width="2" stroke-dasharray="8 4" />
+
+  <!-- Corner Fleur-de-lis / Accents -->
+  <path d="M 20 50 L 50 20 L 35 35 Z" fill="#aa7c11" />
+  <path d="M 380 50 L 350 20 L 365 35 Z" fill="#aa7c11" />
+  <path d="M 20 450 L 50 480 L 35 465 Z" fill="#aa7c11" />
+  <path d="M 380 450 L 350 480 L 365 465 Z" fill="#aa7c11" />
+
+  <!-- Arch Frame -->
+  <path d="M 60 420 L 60 170 C 60 70 340 70 340 170 L 340 420 Z" fill="#1b120a" stroke="url(#goldGrad)" stroke-width="3" />
+
+  <!-- Center Character Symbol / Illustration -->
+  <g transform="translate(200, 230)">
+    
+<circle cx="0" cy="-20" r="36" fill="#eee" stroke="#aa7c11" stroke-width="3"/>
+<path d="M -36 -25 C -70 -70 -20 -85 -10 -50 C 0 -95 60 -70 36 -25 Z" fill="#991b1b" stroke="url(#goldGrad)" stroke-width="3"/>
+<circle cx="-55" cy="-65" r="8" fill="#ffd700"/>
+<circle cx="45" cy="-65" r="8" fill="#ffd700"/>
+<path d="M -15 -10 Q 0 15 15 -10" fill="none" stroke="#800" stroke-width="4" stroke-linecap="round"/>
+<polygon points="-12,-25 -8,-15 -16,-15" fill="#140d07"/>
+<polygon points="12,-25 16,-15 8,-15" fill="#140d07"/>
+
+  </g>
+
+  <!-- Banner Plate -->
+  <path d="M 70 410 L 330 410 L 310 455 L 90 455 Z" fill="#631717" stroke="url(#goldGrad)" stroke-width="3" />
+  <text x="200" y="440" font-family="Georgia, serif" font-size="18" font-weight="bold" fill="#f5e6b8" text-anchor="middle" letter-spacing="2">
+    ШУТ ПИППИН
+  </text>
+</svg>
