@@ -62,29 +62,30 @@ class AudioManager {
     this.stopSpeaking();
 
     try {
-      const pitch = characterId === "general" ? "low" : characterId === "jester" ? "high" : "default";
       const res = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, characterId, pitch }),
+        body: JSON.stringify({ text, characterId }),
       });
 
       if (res.ok) {
-        const data = await res.json();
-        if (data.url) {
-          const audio = new Audio(data.url);
-          this.currentSpeechAudio = audio;
-          audio.onended = () => {
-            if (this.currentSpeechAudio === audio) this.currentSpeechAudio = null;
-            onEnd?.();
-          };
-          audio.onerror = () => {
-            if (this.currentSpeechAudio === audio) this.currentSpeechAudio = null;
-            this.speakFallback(text, characterId, "ru", onEnd);
-          };
-          await audio.play();
-          return;
-        }
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const audio = new Audio(objectUrl);
+        this.currentSpeechAudio = audio;
+
+        audio.onended = () => {
+          URL.revokeObjectURL(objectUrl);
+          if (this.currentSpeechAudio === audio) this.currentSpeechAudio = null;
+          onEnd?.();
+        };
+        audio.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          if (this.currentSpeechAudio === audio) this.currentSpeechAudio = null;
+          this.speakFallback(text, characterId, "ru", onEnd);
+        };
+        await audio.play();
+        return;
       }
     } catch {
       // ignore & fallback
