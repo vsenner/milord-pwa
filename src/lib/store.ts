@@ -18,6 +18,7 @@ interface GameStore {
   currentEvent: GameEvent;
   history: { day: number; eventId: string; choice: "A" | "B" }[];
   isListening: boolean;
+  isSpeaking: boolean;
   isMuted: boolean;
   kingdoms: KingdomProfile[];
   activeKingdomId: string;
@@ -25,9 +26,11 @@ interface GameStore {
   makeDecision: (choiceId: "A" | "B") => void;
   restartGame: () => void;
   setIsListening: (val: boolean) => void;
+  setIsSpeaking: (val: boolean) => void;
   toggleMute: () => void;
   createKingdom: (name: string, motto: string) => void;
   selectKingdom: (kingdom: KingdomProfile) => void;
+  narrateEvent: (event: GameEvent, onEnd?: () => void) => void;
 }
 
 const defaultKingdoms: KingdomProfile[] = [
@@ -55,6 +58,7 @@ export const useGameStore = create<GameStore>()(
       currentEvent: EVENTS[0],
       history: [],
       isListening: false,
+      isSpeaking: false,
       isMuted: false,
       kingdoms: defaultKingdoms,
       activeKingdomId: "k-1",
@@ -90,6 +94,21 @@ export const useGameStore = create<GameStore>()(
         });
         soundFx.play("bell");
       },
+      narrateEvent: (event, onEnd) => {
+        const { language } = get();
+        set({ isSpeaking: true });
+
+        // Build dramatic spoken text: Situation, then Option 1, then Option 2
+        const text =
+          language === "ru"
+            ? `${event.text.ru}. Вариант первый: ${event.choices[0].text.ru}. Вариант второй: ${event.choices[1].text.ru}. Каково ваше решение, милорд?`
+            : `${event.text.en}. Option one: ${event.choices[0].text.en}. Option two: ${event.choices[1].text.en}. What is your command, My Lord?`;
+
+        soundFx.speak(text, event.characterId, language, () => {
+          set({ isSpeaking: false });
+          onEnd?.();
+        });
+      },
       makeDecision: (choiceId) => {
         const { run, currentEvent, history } = get();
         if (run.isGameOver) return;
@@ -102,22 +121,27 @@ export const useGameStore = create<GameStore>()(
 
         if (nextRun.isGameOver) {
           soundFx.play("death");
-          soundFx.speak(
-            nextRun.endCondition ? nextRun.endCondition.message[get().language] : "Конец",
-            get().language
-          );
+          const msg = nextRun.endCondition ? nextRun.endCondition.message[get().language] : "Конец";
+          soundFx.speak(msg, "herald", get().language);
         } else {
-          if (choiceId === "A") {
+          // Play decision effect: coins, crowd or sword
+          if (choice.delta.treasury && choice.delta.treasury > 0) {
             soundFx.play("coins");
+          } else if (choice.delta.people && choice.delta.people > 0) {
+            soundFx.play("crowd");
+          } else if (choice.delta.army && choice.delta.army > 0) {
+            soundFx.play("horns");
           } else {
             soundFx.play("sword");
           }
 
-          // Sequence: Sound effect -> Messenger speech
+          // Sequence: Messenger arrives with hooves sound, then narrates options
           setTimeout(() => {
             soundFx.play("hooves");
-            soundFx.speak(nextEvent.text[get().language], get().language);
-          }, 300);
+            setTimeout(() => {
+              get().narrateEvent(nextEvent);
+            }, 600);
+          }, 400);
         }
 
         set({
@@ -128,13 +152,18 @@ export const useGameStore = create<GameStore>()(
       },
       restartGame: () => {
         soundFx.play("hooves");
+        const ev = getRandomEvent();
         set({
           run: initialRunState,
-          currentEvent: getRandomEvent(),
+          currentEvent: ev,
           history: [],
         });
+        setTimeout(() => {
+          get().narrateEvent(ev);
+        }, 500);
       },
       setIsListening: (val) => set({ isListening: val }),
+      setIsSpeaking: (val) => set({ isSpeaking: val }),
     }),
     {
       name: "milord-game-storage",

@@ -1,17 +1,53 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useTransition } from "react";
+import React, { useEffect, useState, useCallback, useTransition, useRef } from "react";
 import { useGameStore } from "@/lib/store";
 import { StatKey } from "@/lib/engine/types";
-import { Coins, Crown, Users, Shield, Mic, MicOff, RotateCcw, Languages, Volume2, VolumeX } from "lucide-react";
+import {
+  Coins,
+  Crown,
+  Users,
+  Shield,
+  Mic,
+  MicOff,
+  RotateCcw,
+  Languages,
+  Volume2,
+  VolumeX,
+  Volume1,
+} from "lucide-react";
 import { EventCard } from "@/components/EventCard";
 import { KingdomSelector } from "@/components/KingdomSelector";
 import { StartScreen } from "@/components/StartScreen";
 import { soundFx } from "@/lib/audio";
 
+interface SpeechResultEvent {
+  results: {
+    length: number;
+    [index: number]: {
+      [index: number]: {
+        transcript: string;
+      };
+    };
+  };
+}
+
+interface SpeechInstance {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onstart: () => void;
+  onend: () => void;
+  onerror: () => void;
+  onresult: (event: SpeechResultEvent) => void;
+  start: () => void;
+  stop: () => void;
+}
+
 export default function GameBoard() {
   const [mounted, setMounted] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
+  const recognitionRef = useRef<SpeechInstance | null>(null);
   const [, startTransition] = useTransition();
 
   const {
@@ -19,6 +55,7 @@ export default function GameBoard() {
     run,
     currentEvent,
     isListening,
+    isSpeaking,
     isMuted,
     kingdoms,
     activeKingdomId,
@@ -29,6 +66,7 @@ export default function GameBoard() {
     toggleMute,
     createKingdom,
     selectKingdom,
+    narrateEvent,
   } = useGameStore();
 
   useEffect(() => {
@@ -38,65 +76,85 @@ export default function GameBoard() {
   const handleStartGame = () => {
     soundFx.init();
     soundFx.play("hooves");
-    setTimeout(() => {
-      soundFx.speak(currentEvent.text[language], language);
-    }, 400);
     setHasStarted(true);
+    setTimeout(() => {
+      narrateEvent(currentEvent);
+    }, 600);
   };
 
   const handleSpeech = useCallback(() => {
     if (typeof window === "undefined") return;
-    interface SpeechRecognitionEvent {
-      results: { [index: number]: { [index: number]: { transcript: string } } };
-    }
-    interface SpeechRecognitionInstance {
-      lang: string;
-      interimResults: boolean;
-      continuous: boolean;
-      onstart: () => void;
-      onend: () => void;
-      onerror: () => void;
-      onresult: (event: SpeechRecognitionEvent) => void;
-      start: () => void;
-    }
-    type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
+
     const windowWithSpeech = window as unknown as {
-      SpeechRecognition?: SpeechRecognitionConstructor;
-      webkitSpeechRecognition?: SpeechRecognitionConstructor;
+      SpeechRecognition?: new () => SpeechInstance;
+      webkitSpeechRecognition?: new () => SpeechInstance;
     };
-    const SpeechRecognition =
+    const SpeechConstructor =
       windowWithSpeech.SpeechRecognition || windowWithSpeech.webkitSpeechRecognition;
 
-    if (!SpeechRecognition) {
-      alert(language === "ru" ? "Голосовой ввод не поддерживается" : "Speech recognition not supported");
+    if (!SpeechConstructor) {
+      alert(
+        language === "ru"
+          ? "Голосовой ввод не поддерживается вашим браузером. Используйте Chrome или Safari."
+          : "Speech recognition not supported in this browser. Use Chrome or Safari."
+      );
       return;
     }
 
-    if (isListening) {
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
       setIsListening(false);
       return;
     }
 
     try {
-      const recognition = new SpeechRecognition();
+      const recognition = new SpeechConstructor();
       recognition.lang = language === "ru" ? "ru-RU" : "en-US";
       recognition.interimResults = false;
-      recognition.continuous = false;
+      recognition.continuous = true;
 
       recognition.onstart = () => setIsListening(true);
       recognition.onend = () => setIsListening(false);
       recognition.onerror = () => setIsListening(false);
 
-      recognition.onresult = (e: SpeechRecognitionEvent) => {
-        const text = e.results[0][0].transcript.toLowerCase();
-        if (text.includes("да") || text.includes("согласен") || text.includes("yes") || text.includes("agree")) {
+      recognition.onresult = (e: SpeechResultEvent) => {
+        const lastIndex = e.results.length - 1;
+        const text = e.results[lastIndex][0].transcript.toLowerCase();
+
+        // Option 1 / Yes / Approve
+        if (
+          text.includes("да") ||
+          text.includes("согласен") ||
+          text.includes("первый") ||
+          text.includes("один") ||
+          text.includes("казни") ||
+          text.includes("изволю") ||
+          text.includes("yes") ||
+          text.includes("agree") ||
+          text.includes("first") ||
+          text.includes("one")
+        ) {
           makeDecision("A");
-        } else if (text.includes("нет") || text.includes("отказать") || text.includes("no") || text.includes("refuse")) {
+        }
+        // Option 2 / No / Refuse
+        else if (
+          text.includes("нет") ||
+          text.includes("отказать") ||
+          text.includes("второй") ||
+          text.includes("два") ||
+          text.includes("помилуй") ||
+          text.includes("хватит") ||
+          text.includes("no") ||
+          text.includes("refuse") ||
+          text.includes("second") ||
+          text.includes("two")
+        ) {
           makeDecision("B");
         }
       };
 
       recognition.start();
+      recognitionRef.current = recognition;
     } catch {
       setIsListening(false);
     }
@@ -204,7 +262,15 @@ export default function GameBoard() {
             </button>
           </div>
         ) : (
-          <EventCard event={currentEvent} language={language} onDecision={makeDecision} />
+          <div className="space-y-3">
+            <EventCard event={currentEvent} language={language} onDecision={makeDecision} />
+            {isSpeaking && (
+              <div className="flex items-center justify-center gap-1.5 text-xs text-amber-400 animate-pulse">
+                <Volume1 className="w-4 h-4" />
+                <span>{language === "ru" ? "Проситель вещает..." : "The courier speaks..."}</span>
+              </div>
+            )}
+          </div>
         )}
       </section>
 
@@ -212,17 +278,21 @@ export default function GameBoard() {
         <footer className="pt-2 pb-4 text-center space-y-2">
           <button
             onClick={handleSpeech}
-            className={`px-4 py-2 rounded-full border text-xs font-semibold flex items-center justify-center gap-2 mx-auto transition ${
+            className={`px-5 py-2.5 rounded-full border text-xs font-semibold flex items-center justify-center gap-2 mx-auto transition shadow-lg ${
               isListening
-                ? "bg-red-500/20 border-red-500 text-red-300 animate-pulse"
-                : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200"
+                ? "bg-red-500/25 border-red-500 text-red-300 animate-pulse scale-105"
+                : "bg-slate-900 border-slate-800 text-slate-300 hover:text-white"
             }`}
           >
-            {isListening ? <Mic className="w-4 h-4 text-red-400" /> : <MicOff className="w-4 h-4" />}
+            {isListening ? <Mic className="w-4 h-4 text-red-400 animate-bounce" /> : <MicOff className="w-4 h-4 text-slate-400" />}
             <span>
               {isListening
-                ? language === "ru" ? "Слушаю вас, милорд..." : "Listening, My Lord..."
-                : language === "ru" ? "Голосовое управление (Да / Нет)" : "Voice Control (Yes / No)"}
+                ? language === "ru"
+                  ? "Слушаю («Да / Первый» или «Нет / Второй»)..."
+                  : "Listening ('Yes / One' or 'No / Two')..."
+                : language === "ru"
+                ? "Включить микрофон (Голосовое управление)"
+                : "Enable Microphone (Voice Control)"}
             </span>
           </button>
         </footer>
