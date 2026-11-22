@@ -1,0 +1,80 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum RunStatus {
+  IN_PROGRESS
+  WON
+  DEFEATED
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  username     String?
+  passwordHash String
+  role         Role      @default(USER)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  kingdoms     Kingdom[]
+
+  @@map("users")
+}
+
+model Kingdom {
+  id          String     @id @default(cuid())
+  userId      String
+  name        String
+  motto       String?
+  difficulty  String     @default("normal")
+  language    String     @default("ru")
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  runs        GameRun[]
+
+  @@map("kingdoms")
+}
+
+model GameRun {
+  id           String        @id @default(cuid())
+  kingdomId    String
+  day          Int           @default(1)
+  treasury     Int           @default(50)
+  influence    Int           @default(50)
+  people       Int           @default(50)
+  army         Int           @default(50)
+  activeFlags  Json          @default("{}")
+  status       RunStatus     @default(IN_PROGRESS)
+  deathReason  String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  kingdom      Kingdom       @relation(fields: [kingdomId], references: [id], onDelete: Cascade)
+  decisions    DecisionLog[]
+
+  @@map("game_runs")
+}
+
+model DecisionLog {
+  id          String    @id @default(cuid())
+  gameRunId   String
+  day         Int
+  characterId String
+  eventId     String
+  choiceMade  String
+  deltaStats  Json
+  timestamp   DateTime  @default(now())
+  gameRun     GameRun   @relation(fields: [gameRunId], references: [id], onDelete: Cascade)
+
+  @@map("decision_logs")
+}
