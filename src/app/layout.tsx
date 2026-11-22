@@ -17,7 +17,6 @@ export const metadata: Metadata = {
   title: "Да, милорд (Yes, My Lord)",
   description: "Голосовая средневековая стратегия управления королевством",
   manifest: "/manifest.json",
-  themeColor: "#020617",
 };
 
 export default function RootLayout({

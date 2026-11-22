@@ -2,9 +2,10 @@
 
 import React, { useEffect, useState, useCallback, useTransition } from "react";
 import { useGameStore } from "@/lib/store";
-import { CHARACTERS } from "@/lib/engine/characters";
 import { StatKey } from "@/lib/engine/types";
-import { Coins, Crown, Users, Shield, Mic, MicOff, RotateCcw, Languages } from "lucide-react";
+import { Coins, Crown, Users, Shield, Mic, MicOff, RotateCcw, Languages, Volume2, VolumeX } from "lucide-react";
+import { EventCard } from "@/components/EventCard";
+import { KingdomSelector } from "@/components/KingdomSelector";
 
 export default function GameBoard() {
   const [mounted, setMounted] = useState(false);
@@ -15,10 +16,16 @@ export default function GameBoard() {
     run,
     currentEvent,
     isListening,
+    isMuted,
+    kingdoms,
+    activeKingdomId,
     setLanguage,
     makeDecision,
     restartGame,
     setIsListening,
+    toggleMute,
+    createKingdom,
+    selectKingdom,
   } = useGameStore();
 
   useEffect(() => {
@@ -28,15 +35,8 @@ export default function GameBoard() {
   const handleSpeech = useCallback(() => {
     if (typeof window === "undefined") return;
     interface SpeechRecognitionEvent {
-      results: {
-        [index: number]: {
-          [index: number]: {
-            transcript: string;
-          };
-        };
-      };
+      results: { [index: number]: { [index: number]: { transcript: string } } };
     }
-
     interface SpeechRecognitionInstance {
       lang: string;
       interimResults: boolean;
@@ -47,17 +47,13 @@ export default function GameBoard() {
       onresult: (event: SpeechRecognitionEvent) => void;
       start: () => void;
     }
-
     type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
-
     const windowWithSpeech = window as unknown as {
       SpeechRecognition?: SpeechRecognitionConstructor;
       webkitSpeechRecognition?: SpeechRecognitionConstructor;
     };
-
     const SpeechRecognition =
-      windowWithSpeech.SpeechRecognition ||
-      windowWithSpeech.webkitSpeechRecognition;
+      windowWithSpeech.SpeechRecognition || windowWithSpeech.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
       alert(language === "ru" ? "Голосовой ввод не поддерживается" : "Speech recognition not supported");
@@ -96,11 +92,7 @@ export default function GameBoard() {
 
   if (!mounted) return null;
 
-  const char = CHARACTERS[currentEvent.characterId] || {
-    name: { ru: "Незнакомец", en: "Stranger" },
-    role: { ru: "Странник", en: "Traveler" },
-    avatar: "👤",
-  };
+  const currentKingdom = kingdoms.find((k) => k.id === activeKingdomId) || kingdoms[0];
 
   const statIcons: Record<StatKey, { icon: React.ReactNode; label: { ru: string; en: string }; color: string }> = {
     treasury: { icon: <Coins className="w-4 h-4" />, label: { ru: "Казна", en: "Gold" }, color: "text-amber-400" },
@@ -113,23 +105,37 @@ export default function GameBoard() {
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between max-w-md mx-auto p-4 border-x border-slate-800 select-none">
       <header className="space-y-3">
         <div className="flex justify-between items-center text-xs text-slate-400">
-          <span className="font-semibold uppercase tracking-wider text-amber-500">
-            {language === "ru" ? `День ${run.day}` : `Day ${run.day}`}
-          </span>
-          <div className="flex gap-2">
+          <KingdomSelector
+            currentKingdom={currentKingdom}
+            kingdoms={kingdoms}
+            language={language}
+            onSelect={selectKingdom}
+            onCreate={createKingdom}
+          />
+          <div className="flex items-center gap-1.5">
+            <span className="font-bold uppercase tracking-wider text-amber-500 mr-1">
+              {language === "ru" ? `День ${run.day}` : `Day ${run.day}`}
+            </span>
+            <button
+              onClick={toggleMute}
+              className="p-1.5 bg-slate-900 border border-slate-800 rounded-lg hover:bg-slate-800 text-slate-400"
+              title="Звук"
+            >
+              {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5 text-amber-400" />}
+            </button>
             <button
               onClick={() => startTransition(() => setLanguage(language === "ru" ? "en" : "ru"))}
-              className="px-2 py-1 bg-slate-900 border border-slate-800 rounded flex items-center gap-1 hover:bg-slate-800"
+              className="px-2 py-1.5 bg-slate-900 border border-slate-800 rounded-lg flex items-center gap-1 hover:bg-slate-800 text-slate-300"
             >
-              <Languages className="w-3 h-3 text-slate-400" />
+              <Languages className="w-3.5 h-3.5 text-slate-400" />
               <span className="uppercase text-[10px] font-bold">{language}</span>
             </button>
             <button
               onClick={restartGame}
-              className="p-1 bg-slate-900 border border-slate-800 rounded hover:bg-slate-800"
+              className="p-1.5 bg-slate-900 border border-slate-800 rounded-lg hover:bg-slate-800 text-slate-400"
               title="Перезапуск"
             >
-              <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+              <RotateCcw className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -176,38 +182,7 @@ export default function GameBoard() {
             </button>
           </div>
         ) : (
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-2xl relative">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="text-3xl p-2 bg-slate-800/80 rounded-xl border border-slate-700">
-                {char.avatar}
-              </div>
-              <div>
-                <h3 className="font-bold text-sm text-slate-100">{char.name[language]}</h3>
-                <span className="text-[11px] text-amber-400/80 font-medium">{char.role[language]}</span>
-              </div>
-            </div>
-
-            <p className="text-sm text-slate-200 leading-relaxed min-h-[72px]">
-              {currentEvent.text[language]}
-            </p>
-
-            <div className="mt-6 flex flex-col gap-2">
-              <button
-                onClick={() => makeDecision("A")}
-                className="w-full py-2.5 px-3 bg-slate-800/90 hover:bg-slate-700/80 border border-slate-700 rounded-xl text-left text-xs font-medium text-slate-200 transition"
-              >
-                <span className="text-amber-400 font-bold mr-2">1.</span>
-                {currentEvent.choices[0].text[language]}
-              </button>
-              <button
-                onClick={() => makeDecision("B")}
-                className="w-full py-2.5 px-3 bg-slate-800/90 hover:bg-slate-700/80 border border-slate-700 rounded-xl text-left text-xs font-medium text-slate-200 transition"
-              >
-                <span className="text-amber-400 font-bold mr-2">2.</span>
-                {currentEvent.choices[1].text[language]}
-              </button>
-            </div>
-          </div>
+          <EventCard event={currentEvent} language={language} onDecision={makeDecision} />
         )}
       </section>
 
