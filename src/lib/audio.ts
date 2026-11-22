@@ -5,24 +5,29 @@ class AudioManager {
   private isMuted: boolean = false;
   private ambientTimer: NodeJS.Timeout | null = null;
 
-  private initContext() {
-    if (!this.ctx && typeof window !== "undefined") {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (AudioCtx) {
-        this.ctx = new AudioCtx();
-      }
+  public init() {
+    if (typeof window === "undefined") return;
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (AudioCtx && !this.ctx) {
+      this.ctx = new AudioCtx();
     }
     if (this.ctx && this.ctx.state === "suspended") {
       this.ctx.resume();
     }
+    this.startAmbient();
   }
 
   public toggleMute(): boolean {
     this.isMuted = !this.isMuted;
-    if (this.isMuted && this.ambientTimer) {
-      clearInterval(this.ambientTimer);
-      this.ambientTimer = null;
-    } else if (!this.isMuted) {
+    if (this.isMuted) {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+      if (this.ambientTimer) {
+        clearInterval(this.ambientTimer);
+        this.ambientTimer = null;
+      }
+    } else {
       this.startAmbient();
     }
     return this.isMuted;
@@ -33,11 +38,11 @@ class AudioManager {
   }
 
   public startAmbient() {
-    if (this.isMuted || this.ambientTimer || typeof window === "undefined") return;
+    if (this.isMuted || this.ambientTimer || typeof window === "undefined" || !this.ctx) return;
     this.playAmbientDrone();
     this.ambientTimer = setInterval(() => {
       if (!this.isMuted) this.playAmbientDrone();
-    }, 12000);
+    }, 10000);
   }
 
   public speak(text: string, lang: "ru" | "en", onEnd?: () => void) {
@@ -46,26 +51,34 @@ class AudioManager {
       return;
     }
 
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lang === "ru" ? "ru-RU" : "en-US";
-    utterance.rate = 1.0;
-    utterance.pitch = 0.95;
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = lang === "ru" ? "ru-RU" : "en-US";
+      utterance.rate = 1.0;
+      utterance.pitch = 0.95;
 
-    const voices = window.speechSynthesis.getVoices();
-    const targetVoice = voices.find((v) => v.lang.startsWith(lang));
-    if (targetVoice) utterance.voice = targetVoice;
+      const voices = window.speechSynthesis.getVoices();
+      const targetVoice = voices.find((v) => v.lang.startsWith(lang));
+      if (targetVoice) utterance.voice = targetVoice;
 
-    utterance.onend = () => onEnd?.();
-    utterance.onerror = () => onEnd?.();
+      utterance.onend = () => onEnd?.();
+      utterance.onerror = () => onEnd?.();
 
-    window.speechSynthesis.speak(utterance);
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      onEnd?.();
+    }
   }
 
   public play(type: SoundType) {
     if (this.isMuted || typeof window === "undefined") return;
-    this.initContext();
+    if (!this.ctx) this.init();
     if (!this.ctx) return;
+
+    if (this.ctx.state === "suspended") {
+      this.ctx.resume();
+    }
 
     try {
       const now = this.ctx.currentTime;

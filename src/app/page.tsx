@@ -6,9 +6,12 @@ import { StatKey } from "@/lib/engine/types";
 import { Coins, Crown, Users, Shield, Mic, MicOff, RotateCcw, Languages, Volume2, VolumeX } from "lucide-react";
 import { EventCard } from "@/components/EventCard";
 import { KingdomSelector } from "@/components/KingdomSelector";
+import { StartScreen } from "@/components/StartScreen";
+import { soundFx } from "@/lib/audio";
 
 export default function GameBoard() {
   const [mounted, setMounted] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false);
   const [, startTransition] = useTransition();
 
   const {
@@ -31,6 +34,15 @@ export default function GameBoard() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const handleStartGame = () => {
+    soundFx.init();
+    soundFx.play("hooves");
+    setTimeout(() => {
+      soundFx.speak(currentEvent.text[language], language);
+    }, 400);
+    setHasStarted(true);
+  };
 
   const handleSpeech = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -91,6 +103,16 @@ export default function GameBoard() {
   }, [isListening, language, makeDecision, setIsListening]);
 
   if (!mounted) return null;
+
+  if (!hasStarted) {
+    return (
+      <StartScreen
+        language={language}
+        onStart={handleStartGame}
+        onToggleLang={() => startTransition(() => setLanguage(language === "ru" ? "en" : "ru"))}
+      />
+    );
+  }
 
   const currentKingdom = kingdoms.find((k) => k.id === activeKingdomId) || kingdoms[0];
 
