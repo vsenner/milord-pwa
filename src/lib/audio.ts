@@ -1,8 +1,9 @@
-export type SoundType = "hooves" | "coins" | "bell" | "sword" | "death";
+export type SoundType = "hooves" | "coins" | "bell" | "sword" | "death" | "ambient";
 
 class AudioManager {
   private ctx: AudioContext | null = null;
   private isMuted: boolean = false;
+  private ambientTimer: NodeJS.Timeout | null = null;
 
   private initContext() {
     if (!this.ctx && typeof window !== "undefined") {
@@ -18,11 +19,47 @@ class AudioManager {
 
   public toggleMute(): boolean {
     this.isMuted = !this.isMuted;
+    if (this.isMuted && this.ambientTimer) {
+      clearInterval(this.ambientTimer);
+      this.ambientTimer = null;
+    } else if (!this.isMuted) {
+      this.startAmbient();
+    }
     return this.isMuted;
   }
 
   public getMuted(): boolean {
     return this.isMuted;
+  }
+
+  public startAmbient() {
+    if (this.isMuted || this.ambientTimer || typeof window === "undefined") return;
+    this.playAmbientDrone();
+    this.ambientTimer = setInterval(() => {
+      if (!this.isMuted) this.playAmbientDrone();
+    }, 12000);
+  }
+
+  public speak(text: string, lang: "ru" | "en", onEnd?: () => void) {
+    if (this.isMuted || typeof window === "undefined" || !("speechSynthesis" in window)) {
+      onEnd?.();
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang === "ru" ? "ru-RU" : "en-US";
+    utterance.rate = 1.0;
+    utterance.pitch = 0.95;
+
+    const voices = window.speechSynthesis.getVoices();
+    const targetVoice = voices.find((v) => v.lang.startsWith(lang));
+    if (targetVoice) utterance.voice = targetVoice;
+
+    utterance.onend = () => onEnd?.();
+    utterance.onerror = () => onEnd?.();
+
+    window.speechSynthesis.speak(utterance);
   }
 
   public play(type: SoundType) {
@@ -48,10 +85,30 @@ class AudioManager {
         case "death":
           this.playDeath(now);
           break;
+        case "ambient":
+          this.playAmbientDrone();
+          break;
       }
     } catch {
-      // Ignore audio synthesis errors on locked autoplay
+      // autoplay lock guard
     }
+  }
+
+  private playAmbientDrone() {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    [110, 164.81, 220].forEach((freq) => {
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, now);
+      gain.gain.setValueAtTime(0.015, now);
+      gain.gain.exponentialRampToValueAtTime(0.0005, now + 8);
+      osc.connect(gain);
+      gain.connect(this.ctx!.destination);
+      osc.start(now);
+      osc.stop(now + 8.1);
+    });
   }
 
   private playCoins(now: number) {
@@ -92,7 +149,7 @@ class AudioManager {
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = "sine";
-    osc.frequency.setValueAtTime(587.33, now); // D5
+    osc.frequency.setValueAtTime(587.33, now);
     gain.gain.setValueAtTime(0.2, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
     osc.connect(gain);

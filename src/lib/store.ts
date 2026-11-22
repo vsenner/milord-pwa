@@ -102,10 +102,22 @@ export const useGameStore = create<GameStore>()(
 
         if (nextRun.isGameOver) {
           soundFx.play("death");
-        } else if (choiceId === "A") {
-          soundFx.play("coins");
+          soundFx.speak(
+            nextRun.endCondition ? nextRun.endCondition.message[get().language] : "Конец",
+            get().language
+          );
         } else {
-          soundFx.play("sword");
+          if (choiceId === "A") {
+            soundFx.play("coins");
+          } else {
+            soundFx.play("sword");
+          }
+
+          // Sequence: Sound effect -> Messenger speech
+          setTimeout(() => {
+            soundFx.play("hooves");
+            soundFx.speak(nextEvent.text[get().language], get().language);
+          }, 300);
         }
 
         set({

@@ -1,8 +1,12 @@
 import { GameEvent } from "./types";
 import { EXPANDED_EVENTS } from "./events_pack2";
+import { EXPANDED_EVENTS_PACK3 } from "./events_pack3";
+import { EXPANDED_EVENTS_PACK4 } from "./events_pack4";
 
 export const EVENTS: GameEvent[] = [
   ...EXPANDED_EVENTS,
+  ...EXPANDED_EVENTS_PACK3,
+  ...EXPANDED_EVENTS_PACK4,
   {
     id: "herald_tribute",
     characterId: "herald",
