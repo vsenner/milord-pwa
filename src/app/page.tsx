@@ -16,11 +16,14 @@ import {
   VolumeX,
   Volume1,
   Sparkles,
+  User,
 } from "lucide-react";
 import { EventCard } from "@/components/EventCard";
 import { KingdomSelector } from "@/components/KingdomSelector";
 import { StartScreen } from "@/components/StartScreen";
+import { AuthModal } from "@/components/AuthModal";
 import { soundFx } from "@/lib/audio";
+import { authClient } from "@/lib/auth-client";
 
 interface SpeechResultEvent {
   results: {
@@ -48,6 +51,8 @@ interface SpeechInstance {
 export default function GameBoard() {
   const [mounted, setMounted] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<{ name?: string | null; email?: string | null } | null>(null);
   const recognitionRef = useRef<SpeechInstance | null>(null);
   const [, startTransition] = useTransition();
 
@@ -73,6 +78,11 @@ export default function GameBoard() {
 
   useEffect(() => {
     setMounted(true);
+    authClient.getSession().then((session) => {
+      if (session?.data?.user) {
+        setCurrentUser(session.data.user);
+      }
+    });
   }, []);
 
   const handleStartGame = () => {
@@ -166,11 +176,24 @@ export default function GameBoard() {
 
   if (!hasStarted) {
     return (
-      <StartScreen
-        language={language}
-        onStart={handleStartGame}
-        onToggleLang={() => startTransition(() => setLanguage(language === "ru" ? "en" : "ru"))}
-      />
+      <>
+        <StartScreen
+          language={language}
+          user={currentUser}
+          onStart={handleStartGame}
+          onOpenAuth={() => setIsAuthOpen(true)}
+          onToggleLang={() => startTransition(() => setLanguage(language === "ru" ? "en" : "ru"))}
+        />
+        <AuthModal
+          isOpen={isAuthOpen}
+          onClose={() => setIsAuthOpen(false)}
+          onSuccess={() => {
+            authClient.getSession().then((session) => {
+              if (session?.data?.user) setCurrentUser(session.data.user);
+            });
+          }}
+        />
+      </>
     );
   }
 
@@ -195,6 +218,13 @@ export default function GameBoard() {
             onCreate={createKingdom}
           />
           <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setIsAuthOpen(true)}
+              className="p-1.5 bg-slate-900 border border-slate-800 rounded-lg hover:bg-slate-800 text-slate-400"
+              title="Профиль"
+            >
+              <User className="w-3.5 h-3.5 text-amber-400" />
+            </button>
             <span className="font-bold uppercase tracking-wider text-amber-500 mr-1">
               {language === "ru" ? `День ${run.day}` : `Day ${run.day}`}
             </span>
@@ -306,6 +336,16 @@ export default function GameBoard() {
           </button>
         </footer>
       )}
+
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onSuccess={() => {
+          authClient.getSession().then((session) => {
+            if (session?.data?.user) setCurrentUser(session.data.user);
+          });
+        }}
+      />
     </main>
   );
 }

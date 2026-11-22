@@ -38,9 +38,10 @@ const defaultKingdoms: KingdomProfile[] = [
   { id: "k-1", name: "Винтерхолд", motto: "Честь и железо", language: "ru" },
 ];
 
-function getRandomEvent(excludeId?: string): GameEvent {
-  const pool = EVENTS.filter((e) => e.id !== excludeId);
-  return pool[Math.floor(Math.random() * pool.length)] ?? EVENTS[0];
+function getRandomEvent(excludeIds: string[] = []): GameEvent {
+  const pool = EVENTS.filter((e) => !excludeIds.includes(e.id));
+  const chosenPool = pool.length > 0 ? pool : EVENTS;
+  return chosenPool[Math.floor(Math.random() * chosenPool.length)] ?? EVENTS[0];
 }
 
 const initialRunState: RunState = {
@@ -114,7 +115,8 @@ export const useGameStore = create<GameStore>()(
         if (!choice) return;
 
         const nextRun = applyChoice(run, choice);
-        const nextEvent = getRandomEvent(currentEvent.id);
+        const recentIds = history.slice(0, 10).map((h) => h.eventId);
+        const nextEvent = getRandomEvent([...recentIds, currentEvent.id]);
         const aftermathText = choice.aftermath ? choice.aftermath[language] : null;
 
         set({
