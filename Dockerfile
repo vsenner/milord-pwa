@@ -1,27 +1,21 @@
-FROM node:20-alpine AS base
+FROM node:20-bookworm-slim AS base
+RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies only when needed
 FROM base AS deps
-RUN apk add --no-cache libc6-compat
 WORKDIR /app
-
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# Rebuild the source code only when needed
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
-# Generate Prisma Client & Next Build
+ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
 RUN npx prisma generate
 RUN npm run build
 
-# Production image, copy all the files and run next
 FROM base AS runner
 WORKDIR /app
-
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
@@ -32,9 +26,9 @@ RUN adduser --system --uid 1001 nextjs
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 
 USER nextjs
-
 EXPOSE 3000
-
 CMD ["node", "server.js"]
