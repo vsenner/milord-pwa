@@ -15,6 +15,7 @@ import {
   Volume2,
   VolumeX,
   Volume1,
+  Sparkles,
 } from "lucide-react";
 import { EventCard } from "@/components/EventCard";
 import { KingdomSelector } from "@/components/KingdomSelector";
@@ -57,6 +58,7 @@ export default function GameBoard() {
     isListening,
     isSpeaking,
     isMuted,
+    activeAftermath,
     kingdoms,
     activeKingdomId,
     setLanguage,
@@ -75,7 +77,7 @@ export default function GameBoard() {
 
   const handleStartGame = () => {
     soundFx.init();
-    soundFx.play("hooves");
+    soundFx.playSfx("hooves");
     setHasStarted(true);
     setTimeout(() => {
       narrateEvent(currentEvent);
@@ -241,7 +243,14 @@ export default function GameBoard() {
         </div>
       </header>
 
-      <section className="my-auto py-6">
+      <section className="my-auto py-4 space-y-3">
+        {activeAftermath && (
+          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-start gap-2 shadow-lg animate-fade-in">
+            <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <p className="leading-relaxed font-medium">{activeAftermath}</p>
+          </div>
+        )}
+
         {run.isGameOver ? (
           <div className="bg-slate-900 border border-red-900/50 rounded-xl p-6 text-center space-y-4">
             <div className="text-4xl">💀</div>
@@ -267,7 +276,7 @@ export default function GameBoard() {
             {isSpeaking && (
               <div className="flex items-center justify-center gap-1.5 text-xs text-amber-400 animate-pulse">
                 <Volume1 className="w-4 h-4" />
-                <span>{language === "ru" ? "Проситель вещает..." : "The courier speaks..."}</span>
+                <span>{language === "ru" ? "Голос из тронного зала..." : "Voice in the throne room..."}</span>
               </div>
             )}
           </div>

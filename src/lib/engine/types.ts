@@ -19,6 +19,8 @@ export type StoryFlags = Record<string, string | number | boolean>;
 export interface Choice {
   id: "A" | "B";
   text: LocalizedString;
+  spokenOption?: LocalizedString;
+  aftermath?: LocalizedString;
   delta: Partial<ResourceStats>;
   setFlags?: StoryFlags;
 }

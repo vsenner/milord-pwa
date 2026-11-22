@@ -20,6 +20,7 @@ interface GameStore {
   isListening: boolean;
   isSpeaking: boolean;
   isMuted: boolean;
+  activeAftermath: string | null;
   kingdoms: KingdomProfile[];
   activeKingdomId: string;
   setLanguage: (lang: Language) => void;
@@ -60,6 +61,7 @@ export const useGameStore = create<GameStore>()(
       isListening: false,
       isSpeaking: false,
       isMuted: false,
+      activeAftermath: null,
       kingdoms: defaultKingdoms,
       activeKingdomId: "k-1",
       setLanguage: (lang) => set({ language: lang }),
@@ -81,8 +83,9 @@ export const useGameStore = create<GameStore>()(
           run: initialRunState,
           currentEvent: getRandomEvent(),
           history: [],
+          activeAftermath: null,
         });
-        soundFx.play("bell");
+        soundFx.playSfx("bell");
       },
       selectKingdom: (k) => {
         set({
@@ -91,26 +94,20 @@ export const useGameStore = create<GameStore>()(
           run: initialRunState,
           currentEvent: getRandomEvent(),
           history: [],
+          activeAftermath: null,
         });
-        soundFx.play("bell");
+        soundFx.playSfx("bell");
       },
       narrateEvent: (event, onEnd) => {
-        const { language } = get();
-        set({ isSpeaking: true });
-
-        // Build dramatic spoken text: Situation, then Option 1, then Option 2
-        const text =
-          language === "ru"
-            ? `${event.text.ru}. Вариант первый: ${event.choices[0].text.ru}. Вариант второй: ${event.choices[1].text.ru}. Каково ваше решение, милорд?`
-            : `${event.text.en}. Option one: ${event.choices[0].text.en}. Option two: ${event.choices[1].text.en}. What is your command, My Lord?`;
-
-        soundFx.speak(text, event.characterId, language, () => {
+        set({ isSpeaking: true, activeAftermath: null });
+        const audioUrl = `/audio/narrations/${event.id}_prompt.mp3`;
+        soundFx.playFile(audioUrl, () => {
           set({ isSpeaking: false });
           onEnd?.();
         });
       },
       makeDecision: (choiceId) => {
-        const { run, currentEvent, history } = get();
+        const { run, currentEvent, history, language } = get();
         if (run.isGameOver) return;
 
         const choice = currentEvent.choices.find((c) => c.id === choiceId);
@@ -118,49 +115,59 @@ export const useGameStore = create<GameStore>()(
 
         const nextRun = applyChoice(run, choice);
         const nextEvent = getRandomEvent(currentEvent.id);
-
-        if (nextRun.isGameOver) {
-          soundFx.play("death");
-          const msg = nextRun.endCondition ? nextRun.endCondition.message[get().language] : "Конец";
-          soundFx.speak(msg, "herald", get().language);
-        } else {
-          // Play decision effect: coins, crowd or sword
-          if (choice.delta.treasury && choice.delta.treasury > 0) {
-            soundFx.play("coins");
-          } else if (choice.delta.people && choice.delta.people > 0) {
-            soundFx.play("crowd");
-          } else if (choice.delta.army && choice.delta.army > 0) {
-            soundFx.play("horns");
-          } else {
-            soundFx.play("sword");
-          }
-
-          // Sequence: Messenger arrives with hooves sound, then narrates options
-          setTimeout(() => {
-            soundFx.play("hooves");
-            setTimeout(() => {
-              get().narrateEvent(nextEvent);
-            }, 600);
-          }, 400);
-        }
+        const aftermathText = choice.aftermath ? choice.aftermath[language] : null;
 
         set({
           run: nextRun,
           currentEvent: nextEvent,
+          activeAftermath: aftermathText,
+          isSpeaking: true,
           history: [{ day: run.day, eventId: currentEvent.id, choice: choiceId }, ...history],
         });
+
+        // 1. Play immediate visceral SFX (coins clink, sword clash, crowd roar)
+        if (choice.delta.treasury && choice.delta.treasury > 0) {
+          soundFx.playSfx("coins");
+        } else if (choice.delta.people && choice.delta.people > 0) {
+          soundFx.playSfx("crowd");
+        } else if (choice.delta.army && choice.delta.army > 0) {
+          soundFx.playSfx("sword");
+        } else {
+          soundFx.playSfx("bell");
+        }
+
+        // 2. Play consequence voice narration (post-factum reaction)
+        const aftermathUrl = `/audio/narrations/${currentEvent.id}_aftermath_${choiceId.toLowerCase()}.mp3`;
+
+        setTimeout(() => {
+          soundFx.playFile(aftermathUrl, () => {
+            if (nextRun.isGameOver) {
+              soundFx.playSfx("death");
+              set({ isSpeaking: false });
+            } else {
+              // 3. New courier approaches: hooves gallop
+              setTimeout(() => {
+                soundFx.playSfx("hooves", () => {
+                  // 4. Narrate next incoming event
+                  get().narrateEvent(nextEvent);
+                });
+              }, 400);
+            }
+          });
+        }, 500);
       },
       restartGame: () => {
-        soundFx.play("hooves");
+        soundFx.playSfx("hooves");
         const ev = getRandomEvent();
         set({
           run: initialRunState,
           currentEvent: ev,
           history: [],
+          activeAftermath: null,
         });
         setTimeout(() => {
           get().narrateEvent(ev);
-        }, 500);
+        }, 600);
       },
       setIsListening: (val) => set({ isListening: val }),
       setIsSpeaking: (val) => set({ isSpeaking: val }),
