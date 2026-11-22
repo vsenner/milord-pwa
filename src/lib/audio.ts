@@ -50,12 +50,10 @@ class AudioManager {
     }
   }
 
-  public playFile(
-    url: string,
-    onEnd?: () => void,
-    fallbackText?: string,
-    characterId?: string,
-    lang?: "ru" | "en"
+  public async playText(
+    text: string,
+    characterId: string,
+    onEnd?: () => void
   ) {
     if (this.isMuted || typeof window === "undefined") {
       onEnd?.();
@@ -63,37 +61,36 @@ class AudioManager {
     }
     this.stopSpeaking();
 
-    const audio = new Audio(url);
-    this.currentSpeechAudio = audio;
+    try {
+      const pitch = characterId === "general" ? "low" : characterId === "jester" ? "high" : "default";
+      const res = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, characterId, pitch }),
+      });
 
-    let hasEnded = false;
-    const endHandler = () => {
-      if (!hasEnded) {
-        hasEnded = true;
-        if (this.currentSpeechAudio === audio) {
-          this.currentSpeechAudio = null;
+      if (res.ok) {
+        const data = await res.json();
+        if (data.url) {
+          const audio = new Audio(data.url);
+          this.currentSpeechAudio = audio;
+          audio.onended = () => {
+            if (this.currentSpeechAudio === audio) this.currentSpeechAudio = null;
+            onEnd?.();
+          };
+          audio.onerror = () => {
+            if (this.currentSpeechAudio === audio) this.currentSpeechAudio = null;
+            this.speakFallback(text, characterId, "ru", onEnd);
+          };
+          await audio.play();
+          return;
         }
-        onEnd?.();
       }
-    };
+    } catch {
+      // ignore & fallback
+    }
 
-    audio.onended = endHandler;
-    audio.onerror = () => {
-      // Audio file not pre-baked: immediately fallback to browser SpeechSynthesis with role modulation!
-      if (fallbackText) {
-        this.speakFallback(fallbackText, characterId || "herald", lang || "ru", endHandler);
-      } else {
-        endHandler();
-      }
-    };
-
-    audio.play().catch(() => {
-      if (fallbackText) {
-        this.speakFallback(fallbackText, characterId || "herald", lang || "ru", endHandler);
-      } else {
-        endHandler();
-      }
-    });
+    this.speakFallback(text, characterId, "ru", onEnd);
   }
 
   private speakFallback(text: string, characterId: string, lang: "ru" | "en", onEnd?: () => void) {

@@ -102,22 +102,15 @@ export const useGameStore = create<GameStore>()(
       narrateEvent: (event, onEnd) => {
         const { language } = get();
         set({ isSpeaking: true, activeAftermath: null });
-        const audioUrl = `/audio/narrations/${event.id}_prompt.mp3`;
 
         const spokenOptA = event.choices[0].spokenOption ? event.choices[0].spokenOption[language] : event.choices[0].text[language];
         const spokenOptB = event.choices[1].spokenOption ? event.choices[1].spokenOption[language] : event.choices[1].text[language];
         const fullPrompt = `${event.text[language]}. ${spokenOptA}. ${spokenOptB}. ${language === "ru" ? "Каково ваше решение, милорд?" : "What is your decree, My Lord?"}`;
 
-        soundFx.playFile(
-          audioUrl,
-          () => {
-            set({ isSpeaking: false });
-            onEnd?.();
-          },
-          fullPrompt,
-          event.characterId,
-          language
-        );
+        soundFx.playText(fullPrompt, event.characterId, () => {
+          set({ isSpeaking: false });
+          onEnd?.();
+        });
       },
       makeDecision: (choiceId) => {
         const { run, currentEvent, history, language } = get();
@@ -150,31 +143,35 @@ export const useGameStore = create<GameStore>()(
           soundFx.playSfx("bell");
         }
 
-        // 2. Play consequence voice narration (post-factum reaction)
-        const aftermathUrl = `/audio/narrations/${currentEvent.id}_aftermath_${choiceId.toLowerCase()}.mp3`;
-
-        setTimeout(() => {
-          soundFx.playFile(
-            aftermathUrl,
-            () => {
-              if (nextRun.isGameOver) {
-                soundFx.playSfx("death");
-                set({ isSpeaking: false });
-              } else {
-                // 3. New courier approaches: hooves gallop
-                setTimeout(() => {
-                  soundFx.playSfx("hooves", () => {
-                    // 4. Narrate next incoming event
-                    get().narrateEvent(nextEvent);
-                  });
-                }, 400);
+        // 2. Play consequence voice narration (post-factum reaction with fallback)
+        if (aftermathText) {
+          setTimeout(() => {
+            soundFx.playText(
+              aftermathText,
+              currentEvent.characterId,
+              () => {
+                if (nextRun.isGameOver) {
+                  soundFx.playSfx("death");
+                  set({ isSpeaking: false });
+                } else {
+                  // 3. New courier approaches: hooves gallop
+                  setTimeout(() => {
+                    soundFx.playSfx("hooves", () => {
+                      // 4. Narrate next incoming event
+                      get().narrateEvent(nextEvent);
+                    });
+                  }, 400);
+                }
               }
-            },
-            aftermathText || undefined,
-            currentEvent.characterId,
-            language
-          );
-        }, 500);
+            );
+          }, 400);
+        } else {
+          setTimeout(() => {
+            soundFx.playSfx("hooves", () => {
+              get().narrateEvent(nextEvent);
+            });
+          }, 400);
+        }
       },
       restartGame: () => {
         soundFx.playSfx("hooves");
